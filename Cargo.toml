@@ -1,0 +1,20 @@
+[package]
+name = "hyperswarm"
+version = "1.0.0"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/Frando/hyperswarm"
+documentation = "https://docs.rs/hyperswarm"
+description = "Peer to peer networking stack"
+readme = "README.md"
+edition = "2018"
+keywords = []
+categories = []
+authors = [
+    "Franz Heinzmann <franz@arso.xyz>"
+]
+
+[features]
+
+[dependencies]
+
+[dev-dependencies]
