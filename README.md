@@ -26,7 +26,7 @@
 </div>
 
 <div align="center">
-  <h4>
+  <h5>
     <a href="https://docs.rs/hyperswarm">
       API Docs
     </a>
@@ -34,12 +34,14 @@
     <a href="https://github.com/Frando/hyperswarm/blob/master.github/CONTRIBUTING.md">
       Contributing
     </a>
-  </h4>
+  </h5>
 </div>
+
+*NOTE: This is still in early stages. See the roadmap below. Please feel free to open issues and send PRs :-)*
 
 ## Installation
 ```sh
-$ cargo add hyperswarm
+$ cargo add hyperswarm --git https://github.com/Frando/hyperswarm-rs.git
 ```
 
 ## Usage
