@@ -32,7 +32,7 @@ pub struct Hyperswarm {
 }
 impl fmt::Debug for Hyperswarm {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Driver")
+        f.debug_struct("Hyperswarm")
             .field("topics", &self.topics)
             .field("local_addr", &self.incoming.local_addr())
             // .field("discovery", &self.discovery)
@@ -233,75 +233,58 @@ impl AsyncWrite for HyperswarmStream {
 
 #[cfg(test)]
 mod test {
-    use super::{Config, Hyperswarm, HyperswarmStream, Topic, TopicConfig};
+    use super::{Config, Hyperswarm, TopicConfig};
     use crate::run_bootstrap_node;
-    use async_std::task::{self, JoinHandle};
+    use async_std::task;
     use futures_lite::{AsyncReadExt, AsyncWriteExt, StreamExt};
     use std::io::Result;
     use std::net::SocketAddr;
 
-    fn drive_stream(mut stream: HyperswarmStream, name: &'static str) {
-        task::spawn(async move {
-            stream
-                .write_all(format!("hello, here is {}", name).as_bytes())
-                .await
-                .unwrap();
-            let mut buf = vec![0u8; 64];
-            loop {
-                match stream.read(&mut buf[..]).await {
-                    Err(e) => eprintln!("[{}] ERROR: {}", name, e),
-                    Ok(0) => {
-                        eprintln!("[{}] stream closed", name,);
-                        return;
-                    }
-                    Ok(n) => eprintln!(
-                        "[{}] RECV: {:?}",
-                        name,
-                        String::from_utf8(buf[..n].to_vec())
-                    ),
-                };
-            }
-        });
-    }
-
     #[async_std::test]
-    async fn test_driver() -> Result<()> {
-        let (bs_addr, bs_task) = run_bootstrap_node::<SocketAddr>(None).await?;
-        eprintln!("ok go");
-        let mut config = Config::default().set_bootstrap_nodes(vec![bs_addr]);
+    async fn test_swarm() -> Result<()> {
+        let (bs_addr, _bs_task) = run_bootstrap_node::<SocketAddr>(None).await?;
+        let config = Config::default().set_bootstrap_nodes(vec![bs_addr]);
         let mut swarm_a = Hyperswarm::bind(config.clone()).await?;
         let mut swarm_b = Hyperswarm::bind(config).await?;
-        eprintln!("A {:?}", swarm_a);
-        eprintln!("B {:?}", swarm_b);
+        // eprintln!("A {:?}", swarm_a);
+        // eprintln!("B {:?}", swarm_b);
 
         let topic = [0u8; 32];
         let config = TopicConfig::both();
         swarm_a.configure(topic, config.clone());
         swarm_b.configure(topic, config.clone());
 
-        // let topic = [1u8; 32];
-        // let config = TopicConfig::both();
-        // swarm_a.configure(topic, config.clone());
-        // swarm_b.configure(topic, config.clone());
-
         let task_a = task::spawn(async move {
+            let mut buf = vec![0u8; 1];
             while let Some(stream) = swarm_a.next().await {
-                let stream = stream.unwrap();
-                eprintln!("A incoming: {:?}", stream);
-                drive_stream(stream, "alice");
+                let mut stream = stream.unwrap();
+                stream.write_all(b"A").await.unwrap();
+                // eprintln!("A incoming: {:?}", stream);
+                let n = stream.read(&mut buf).await.unwrap();
+                assert_eq!(n, 1);
+                assert_eq!(&buf[..n], b"B");
+                // eprintln!("A res {:?} buf {:?}", n, &buf);
+                return;
             }
         });
+
         let task_b = task::spawn(async move {
+            let mut buf = vec![0u8, 1];
             while let Some(stream) = swarm_b.next().await {
-                let stream = stream.unwrap();
-                eprintln!("B incoming: {:?}", stream);
-                drive_stream(stream, "bob");
+                let mut stream = stream.unwrap();
+                stream.write_all(b"B").await.unwrap();
+                // eprintln!("B incoming: {:?}", stream);
+                let n = stream.read(&mut buf).await.unwrap();
+                assert_eq!(n, 1);
+                assert_eq!(&buf[..n], b"A");
+                // eprintln!("B res {:?} buf {:?}", n, &buf);
+                return;
             }
         });
 
         task_a.await;
         task_b.await;
-        bs_task.await?;
+        // bs_task.await?;
         Ok(())
     }
 }
