@@ -11,9 +11,13 @@
 // #![warn(missing_docs, missing_doc_code_examples, unreachable_pub)]
 
 mod bootstrap;
-mod hyperswarm;
+mod config;
+mod swarm;
 
-pub use bootstrap::*;
-pub use hyperswarm::*;
+pub mod discovery;
+pub mod transport;
 
-pub use hyperswarm_dht::IdBytes;
+pub use bootstrap::run_bootstrap_node;
+pub use config::{Config, TopicConfig};
+pub use swarm::{Hyperswarm, HyperswarmStream};
+// pub use hyperswarm_dht::{DhtConfig, IdBytes};

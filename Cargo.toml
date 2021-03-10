@@ -1,6 +1,6 @@
 [package]
 name = "hyperswarm"
-version = "1.0.0"
+version = "0.1.0"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/Frando/hyperswarm"
 documentation = "https://docs.rs/hyperswarm"
@@ -16,16 +16,24 @@ authors = [
 [features]
 
 [dependencies]
-hyperswarm-dht = { git = "https://github.com/Frando/hyperswarm-dht.git", branch = "hyperspace" }
 async-std = { version = "1.9.0", features = ["unstable"] }
 futures-lite = "1.11.3"
 futures-channel = "0.3.13"
 log = "0.4.14"
 futures = "0.3.13"
+async-trait = "0.1.42"
+async-compat = "0.1.0"
+multicast-socket = "0.2.1"
+hex = "0.4.3"
+pretty-hash = "0.4.1"
+hyperswarm-dht = { git = "https://github.com/Frando/hyperswarm-dht.git", branch = "hyperspace" }
+colmeia-hyperswarm-mdns = { git = "https://github.com/bltavares/colmeia.git", rev = "e92ab71981356197a21592b7ce6854e209582985" }
+libutp-rs = { git = "https://github.com/Frando/libutp-rs.git", branch = "feat/clone" }
 
 [dev-dependencies]
 env_logger = "0.8.3"
 async-std = { version = "1.9.0", features = ["unstable", "attributes"] }
 
-[patches.crates-io]
-hyperswarm-dht = { path = "../hyperswarm-dht" }
+# [patch.crates-io]
+# hyperswarm-dht = { path = "../hyperswarm-dht" }
+# libutp-rs = { path = "../libutp-rs" }
