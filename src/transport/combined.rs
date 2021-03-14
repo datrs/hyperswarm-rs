@@ -73,6 +73,14 @@ impl CombinedTransport {
         let stream = map(stream);
         let conn = Connection::new(stream, peer_addr, is_initiator, protocol);
         Some(Ok(conn))
+
+        // TODO:
+        // The code above leads to establishing BOTH a utp and a tcp connection.
+        // This we do not want.
+        // The code below would cancel either connection if connected already over the other
+        // protocol. However this does not work reliably either. The connectoin disambituation
+        // needs some more thought.
+
         // let addr_without_port = peer_addr.set_port(0);
         // if !self.connected.contains(&peer_addr) {
         //     self.connected.insert(peer_addr.clone());
