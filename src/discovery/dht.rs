@@ -73,11 +73,7 @@ impl Discovery for DhtDiscovery {
             port: Some(self.local_port as u32),
             local_addr: None,
         };
-        if self.bootstrapped {
-            self.state.lookup(opts);
-        } else {
-            self.pending_commands.push_back(Command::Lookup(opts))
-        }
+        self.pending_commands.push_back(Command::Lookup(opts))
     }
 
     fn announce(&mut self, topic: Topic) {
@@ -86,11 +82,7 @@ impl Discovery for DhtDiscovery {
             port: Some(self.local_port as u32),
             local_addr: None,
         };
-        if self.bootstrapped {
-            self.state.lookup(opts);
-        } else {
-            self.pending_commands.push_back(Command::Announce(opts))
-        }
+        self.pending_commands.push_back(Command::Announce(opts))
     }
 }
 
@@ -102,12 +94,16 @@ impl Stream for DhtDiscovery {
                 return Poll::Ready(Some(Ok(event)));
             }
 
+            if self.bootstrapped {
+                self.execute_pending_commands();
+            }
+
             let event = ready!(Pin::new(&mut self.state).poll_next(cx));
             trace!("DHT event: {:?}", event);
             let event = event.unwrap();
             match event {
                 HyperDhtEvent::Bootstrapped { .. } => {
-                    self.execute_pending_commands();
+                    self.bootstrapped = true;
                 }
                 HyperDhtEvent::AnnounceResult { .. } => {}
                 HyperDhtEvent::LookupResult { lookup, .. } => {
