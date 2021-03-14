@@ -37,7 +37,7 @@ enum Command {
 }
 
 impl DhtDiscovery {
-    pub async fn listen(local_port: u16, config: Config) -> io::Result<Self> {
+    pub async fn bind(local_port: u16, config: Config) -> io::Result<Self> {
         let dht_config = DhtConfig::default();
         let dht_config = if let Some(bootstrap) = config.bootstrap.as_ref() {
             dht_config.set_bootstrap_nodes(bootstrap)

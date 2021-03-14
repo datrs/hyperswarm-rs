@@ -11,6 +11,8 @@ use std::io;
 use std::pin::Pin;
 use std::time::Duration;
 
+use crate::Config;
+
 use super::{Discovery, DiscoveryMethod, PeerInfo, Topic};
 
 mod socket {
@@ -49,22 +51,8 @@ impl fmt::Debug for MdnsDiscovery {
     }
 }
 
-impl Discovery for MdnsDiscovery {
-    fn lookup(&mut self, topic: Topic) {
-        self.pending_commands_tx
-            .try_send(Command::Lookup(topic))
-            .unwrap();
-    }
-
-    fn announce(&mut self, topic: Topic) {
-        self.pending_commands_tx
-            .try_send(Command::Announce(topic))
-            .unwrap();
-    }
-}
-
 impl MdnsDiscovery {
-    pub async fn listen(local_port: u16) -> io::Result<Self> {
+    pub async fn bind(local_port: u16, _config: Config) -> io::Result<Self> {
         let self_id = self_id();
         let socket = socket::create()?;
         let lookup_interval = Duration::from_secs(60);
@@ -82,7 +70,23 @@ impl MdnsDiscovery {
             pending_future: None,
         })
     }
+}
 
+impl Discovery for MdnsDiscovery {
+    fn lookup(&mut self, topic: Topic) {
+        self.pending_commands_tx
+            .try_send(Command::Lookup(topic))
+            .unwrap();
+    }
+
+    fn announce(&mut self, topic: Topic) {
+        self.pending_commands_tx
+            .try_send(Command::Announce(topic))
+            .unwrap();
+    }
+}
+
+impl MdnsDiscovery {
     fn poll_pending_future(&mut self, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
         if let Some(ref mut fut) = self.pending_future {
             let res = ready!(Pin::new(fut).poll(cx));

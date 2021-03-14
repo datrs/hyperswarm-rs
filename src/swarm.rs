@@ -1,47 +1,35 @@
 use async_std::channel;
-use futures_lite::{ready, AsyncRead, AsyncWrite, FutureExt, Stream};
+use futures_lite::Stream;
 use log::*;
 use std::collections::HashMap;
 use std::fmt;
-use std::future::Future;
 use std::io;
-use std::net::SocketAddr;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
 use crate::config::{Config, TopicConfig};
 use crate::discovery::Topic;
 use crate::discovery::{combined::CombinedDiscovery, Discovery};
-use crate::transport::Incoming;
 use crate::transport::{
     combined::{CombinedStream, CombinedTransport},
-    Transport,
+    Connection, Transport,
 };
 
-pub type ConnectFut = Pin<Box<dyn Future<Output = io::Result<HyperswarmStream>> + Send + 'static>>;
 type ConfigureCommand = (Topic, TopicConfig);
 
 pub struct Hyperswarm {
     topics: HashMap<Topic, TopicConfig>,
     discovery: CombinedDiscovery,
     transport: CombinedTransport,
-    incoming: Incoming<CombinedStream>,
     command_tx: channel::Sender<ConfigureCommand>,
     command_rx: channel::Receiver<ConfigureCommand>,
-    pending_connects: Vec<ConnectFut>,
 }
 impl fmt::Debug for Hyperswarm {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Hyperswarm")
             .field("topics", &self.topics)
-            .field("local_addr", &self.incoming.local_addr())
-            // .field("discovery", &self.discovery)
-            // .field("transport", &self.transport)
-            // .field("incoming", &self.incoming)
-            .field(
-                "pending_connects",
-                &format!("<{}>", self.pending_connects.len()),
-            )
+            .field("discovery", &self.discovery)
+            .field("transport", &self.transport)
             .finish()
     }
 }
@@ -49,18 +37,18 @@ impl fmt::Debug for Hyperswarm {
 impl Hyperswarm {
     pub async fn bind(config: Config) -> io::Result<Self> {
         let local_addr = "localhost:0";
-        let mut transport = CombinedTransport::new();
-        let incoming = transport.listen(local_addr).await?;
-        let local_addr = incoming.local_addr();
+
+        let transport = CombinedTransport::bind(local_addr).await?;
+        let local_addr = transport.local_addr();
         let port = local_addr.port();
-        let discovery = CombinedDiscovery::listen(port, config).await?;
+        let discovery = CombinedDiscovery::bind(port, config).await?;
+
         let (command_tx, command_rx) = channel::unbounded::<ConfigureCommand>();
+
         Ok(Self {
             topics: HashMap::new(),
             discovery,
             transport,
-            incoming,
-            pending_connects: vec![],
             command_tx,
             command_rx,
         })
@@ -76,23 +64,6 @@ impl Hyperswarm {
         }
         // TODO: unannounce and stop-lookup
         self.topics.insert(topic, config);
-    }
-
-    fn poll_pending_connects(
-        &mut self,
-        cx: &mut Context<'_>,
-    ) -> Poll<Option<io::Result<HyperswarmStream>>> {
-        let mut i = 0;
-        let mut iter = self.pending_connects.iter_mut();
-        while let Some(ref mut fut) = iter.next() {
-            let res = Pin::new(fut).poll(cx);
-            if let Poll::Ready(res) = res {
-                self.pending_connects.remove(i);
-                return Poll::Ready(Some(res));
-            }
-            i += 1;
-        }
-        Poll::Pending
     }
 
     pub fn handle(&self) -> SwarmHandle {
@@ -114,14 +85,15 @@ impl SwarmHandle {
 }
 
 impl Stream for Hyperswarm {
-    type Item = io::Result<HyperswarmStream>;
+    type Item = io::Result<Connection<CombinedStream>>;
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let this = self.get_mut();
 
-        // Poll pending connect futures.
-        let res = this.poll_pending_connects(cx);
-        if res.is_ready() {
-            return res;
+        // Poll new connections.
+        let res = Pin::new(&mut this.transport).poll_next(cx);
+        if let Poll::Ready(Some(res)) = res {
+            debug!("new connection: {:?}", res);
+            return Poll::Ready(Some(res));
         }
 
         // Poll commands.
@@ -136,98 +108,11 @@ impl Stream for Hyperswarm {
             Poll::Pending | Poll::Ready(None) => {}
             Poll::Ready(Some(Err(e))) => return Poll::Ready(Some(Err(e))),
             Poll::Ready(Some(Ok(peer_info))) => {
-                debug!("discovery: {:?}", peer_info);
-                let fut = connect(this.transport.clone(), peer_info.addr());
-                let mut fut = fut.boxed();
-                let res = fut.poll(cx);
-                if let Poll::Ready(res) = res {
-                    return Poll::Ready(Some(res));
-                } else {
-                    this.pending_connects.push(fut);
-                }
+                this.transport.connect(peer_info.addr());
             }
         }
 
-        // Poll incoming streams.
-        let stream = ready!(Pin::new(&mut this.incoming).poll_next(cx));
-        let stream = stream.unwrap();
-        let stream = stream.map(|stream| HyperswarmStream::new(stream, false));
-        Poll::Ready(Some(stream))
-    }
-}
-
-async fn connect(
-    mut transport: CombinedTransport,
-    peer_addr: SocketAddr,
-) -> io::Result<HyperswarmStream> {
-    transport
-        .connect(peer_addr)
-        .await
-        .map(|stream| HyperswarmStream::new(stream, true))
-}
-
-#[derive(Debug)]
-pub struct HyperswarmStream {
-    inner: CombinedStream,
-    peer_addr: SocketAddr,
-    is_initiator: bool,
-}
-
-impl HyperswarmStream {
-    pub fn new(inner: CombinedStream, is_initiator: bool) -> Self {
-        Self {
-            peer_addr: inner.peer_addr(),
-            inner,
-            is_initiator,
-        }
-    }
-
-    pub fn peer_addr(&self) -> SocketAddr {
-        self.peer_addr
-    }
-
-    pub fn protocol(&self) -> String {
-        self.inner.protocol()
-    }
-
-    pub fn is_initiator(&self) -> bool {
-        self.is_initiator
-    }
-
-    pub fn get_ref(&self) -> &CombinedStream {
-        &self.inner
-    }
-
-    pub fn get_mut(&mut self) -> &mut CombinedStream {
-        &mut self.inner
-    }
-}
-
-impl AsyncRead for HyperswarmStream {
-    fn poll_read(
-        mut self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        buf: &mut [u8],
-    ) -> Poll<io::Result<usize>> {
-        Pin::new(&mut self.inner).poll_read(cx, buf)
-    }
-}
-
-impl AsyncWrite for HyperswarmStream {
-    fn poll_write(
-        mut self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        buf: &[u8],
-    ) -> Poll<io::Result<usize>> {
-        Pin::new(&mut self.inner).poll_write(cx, buf)
-    }
-
-    fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-        Pin::new(&mut self.inner).poll_flush(cx)
-    }
-
-    fn poll_close(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-        Pin::new(&mut self.inner).poll_close(cx)
+        Poll::Pending
     }
 }
 
@@ -235,6 +120,7 @@ impl AsyncWrite for HyperswarmStream {
 mod test {
     use super::{Config, Hyperswarm, TopicConfig};
     use crate::run_bootstrap_node;
+    use async_std::channel;
     use async_std::task;
     use futures_lite::{AsyncReadExt, AsyncWriteExt, StreamExt};
     use std::io::Result;
@@ -256,45 +142,56 @@ mod test {
         swarm_a.configure(topic, config.clone());
         swarm_b.configure(topic, config.clone());
 
-        let task_a = task::spawn(async move {
-            let mut buf = vec![0u8; 1];
+        let (done1_tx, mut done1_rx) = channel::bounded(1);
+        let _task_a = task::spawn(async move {
             while let Some(stream) = swarm_a.next().await {
                 let mut stream = stream.unwrap();
-                stream.write_all(b"A").await.unwrap();
-                eprintln!(
-                    "A incoming: method {} init {}",
-                    stream.protocol(),
-                    stream.is_initiator()
-                );
-                let n = stream.read(&mut buf).await.unwrap();
-                assert_eq!(n, 1);
-                assert_eq!(&buf[..n], b"B");
-                // eprintln!("A res {:?} buf {:?}", n, &buf);
-                return;
+                let done_tx = done1_tx.clone();
+                task::spawn(async move {
+                    let mut buf = vec![0u8; 1];
+                    stream.write_all(b"A").await.unwrap();
+                    eprintln!(
+                        "A incoming: method {} init {}",
+                        stream.protocol(),
+                        stream.is_initiator()
+                    );
+                    let n = stream.read(&mut buf).await.unwrap();
+                    assert_eq!(n, 1);
+                    assert_eq!(&buf[..n], b"B");
+                    eprintln!("A res {:?} buf {:?}", n, &buf);
+                    let _ = done_tx.send(()).await;
+                });
             }
         });
 
-        let task_b = task::spawn(async move {
-            let mut buf = vec![0u8, 1];
+        let (done2_tx, mut done2_rx) = channel::bounded(1);
+        let _task_b = task::spawn(async move {
             while let Some(stream) = swarm_b.next().await {
                 let mut stream = stream.unwrap();
-                // eprintln!("B incoming: {:?}", stream);
-                eprintln!(
-                    "B incoming: method {} init {}",
-                    stream.protocol(),
-                    stream.is_initiator()
-                );
-                stream.write_all(b"B").await.unwrap();
-                let n = stream.read(&mut buf).await.unwrap();
-                assert_eq!(n, 1);
-                assert_eq!(&buf[..n], b"A");
-                // eprintln!("B res {:?} buf {:?}", n, &buf);
-                return;
+                let done_tx = done2_tx.clone();
+                task::spawn(async move {
+                    let mut buf = vec![0u8, 1];
+                    // eprintln!("B incoming: {:?}", stream);
+                    eprintln!(
+                        "B incoming: method {} init {}",
+                        stream.protocol(),
+                        stream.is_initiator()
+                    );
+                    stream.write_all(b"B").await.unwrap();
+                    let n = stream.read(&mut buf).await.unwrap();
+                    assert_eq!(n, 1);
+                    assert_eq!(&buf[..n], b"A");
+                    eprintln!("B res {:?} buf {:?}", n, &buf);
+                    let _ = done_tx.send(()).await;
+                    // done_tx.send(()).await.unwrap();
+                });
             }
         });
 
-        task_a.await;
-        task_b.await;
+        done1_rx.next().await.unwrap();
+        done2_rx.next().await.unwrap();
+        // task_a.await;
+        // task_b.await;
         // bs_task.await?;
         Ok(())
     }

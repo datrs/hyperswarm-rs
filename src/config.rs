@@ -1,6 +1,6 @@
 use std::net::SocketAddr;
 
-#[derive(Default, Clone)]
+#[derive(Debug, Default, Clone)]
 pub struct Config {
     pub bootstrap: Option<Vec<SocketAddr>>,
     pub ephemeral: bool,

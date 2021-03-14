@@ -1,19 +1,23 @@
 use async_compat::Compat;
 use async_trait::async_trait;
+use futures::stream::FuturesUnordered;
 use futures_lite::StreamExt;
 use futures_lite::{AsyncRead, AsyncWrite};
-use libutp_rs::{UtpContext, UtpSocket};
+use libutp_rs::{Connect as ConnectFut, UtpContext, UtpListener, UtpSocket};
 use std::fmt;
 use std::io;
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
-use super::{Incoming, Transport};
+use super::{Connection, Transport};
 
-#[derive(Clone)]
+const PROTOCOL: &'static str = "utp";
+
 pub struct UtpTransport {
-    context: Option<UtpContext>,
+    context: UtpContext,
+    pending_connects: FuturesUnordered<ConnectFut>,
+    incoming: UtpListener,
 }
 
 impl fmt::Debug for UtpTransport {
@@ -22,38 +26,64 @@ impl fmt::Debug for UtpTransport {
     }
 }
 
+impl UtpTransport {
+    pub async fn bind<A>(local_addr: A) -> io::Result<Self>
+    where
+        A: ToSocketAddrs + Send,
+    {
+        let addr = local_addr.to_socket_addrs()?.next().unwrap();
+        let context = UtpContext::bind(addr)?;
+        let incoming = context.listener();
+        Ok(Self {
+            context,
+            incoming,
+            pending_connects: FuturesUnordered::new(),
+        })
+    }
+}
+
 #[async_trait]
 impl Transport for UtpTransport {
     type Connection = UtpStream;
-    fn new() -> Self {
-        Self { context: None }
+    fn connect(&mut self, peer_addr: SocketAddr) {
+        // eprintln!("UTP CONNECT START {}", peer_addr);
+        let fut = self.context.connect(peer_addr);
+        self.pending_connects.push(fut);
     }
-    async fn listen<A>(&mut self, local_addr: A) -> io::Result<Incoming<Self::Connection>>
-    where
-        A: ToSocketAddrs + Send,
-    {
-        if self.context.is_some() {
-            panic!("may not listen more than once");
+
+    fn poll_next(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Option<io::Result<Connection<Self::Connection>>>> {
+        let incoming = Pin::new(&mut self.incoming).poll_next(cx);
+        if let Some(conn) = into_connection(incoming, false) {
+            // eprintln!("UTP INCOMING {:?}", conn);
+            return Poll::Ready(Some(conn));
         }
-        let addr = local_addr.to_socket_addrs()?.next().unwrap();
-        let context = UtpContext::bind(addr)?;
-        let listener = context.listener();
-        self.context = Some(context);
-        let listener = listener.map(|s| s.map(|s| UtpStream::new(s)));
-        let incoming = Incoming::new(listener, addr);
-        Ok(incoming)
+
+        let connect = Pin::new(&mut self.pending_connects).poll_next(cx);
+        if let Some(conn) = into_connection(connect, true) {
+            // eprintln!("UTP CONNECT {:?}", conn);
+            return Poll::Ready(Some(conn));
+        }
+        Poll::Pending
     }
-    async fn connect<A>(&mut self, peer_addr: A) -> io::Result<Self::Connection>
-    where
-        A: ToSocketAddrs + Send,
-    {
-        if self.context.is_none() {
-            panic!("socket is not bound! use listen() first");
+}
+
+fn into_connection(
+    poll: Poll<Option<io::Result<UtpSocket>>>,
+    is_initiator: bool,
+) -> Option<io::Result<Connection<UtpStream>>> {
+    match poll {
+        Poll::Pending => None,
+        Poll::Ready(None) => None,
+        Poll::Ready(Some(Err(e))) => Some(Err(e)),
+        Poll::Ready(Some(Ok(stream))) => {
+            let stream = UtpStream::new(stream);
+            let peer_addr = stream.peer_addr();
+            let conn = Connection::new(stream, peer_addr, is_initiator, PROTOCOL.into());
+            Some(Ok(conn))
         }
-        let addr = peer_addr.to_socket_addrs()?.next().unwrap();
-        let stream = self.context.as_ref().unwrap().connect(addr).await?;
-        let stream = UtpStream::new(stream);
-        Ok(stream)
     }
 }
 
