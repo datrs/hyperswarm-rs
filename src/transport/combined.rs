@@ -2,6 +2,8 @@ use async_trait::async_trait;
 use futures_lite::{AsyncRead, AsyncWrite};
 // use log::*;
 use std::collections::HashSet;
+use std::fmt;
+use std::fmt::Debug;
 use std::io;
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::pin::Pin;
@@ -127,11 +129,20 @@ impl Transport for CombinedTransport {
     }
 }
 
-#[derive(Debug)]
 pub enum CombinedStream {
     Tcp(TcpStream),
     #[cfg(feature = "transport_utp")]
     Utp(UtpStream),
+}
+
+impl Debug for CombinedStream {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let name = match self {
+            Self::Tcp(_) => "Tcp",
+            Self::Utp(_) => "Utp",
+        };
+        write!(f, "CombinedStream::{}", name)
+    }
 }
 
 impl CombinedStream {

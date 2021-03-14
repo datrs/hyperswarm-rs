@@ -164,6 +164,9 @@ mod test {
             }
         });
 
+        // wait 100ms so that the first swarm properly announced to the DHT.
+        timeout(100).await;
+
         let (done2_tx, mut done2_rx) = channel::bounded(1);
         let _task_b = task::spawn(async move {
             while let Some(stream) = swarm_b.next().await {
@@ -194,5 +197,13 @@ mod test {
         // task_b.await;
         // bs_task.await?;
         Ok(())
+    }
+
+    async fn timeout(ms: u64) {
+        let _ = async_std::future::timeout(
+            std::time::Duration::from_millis(ms),
+            futures::future::pending::<()>(),
+        )
+        .await;
     }
 }
