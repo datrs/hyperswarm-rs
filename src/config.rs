@@ -7,8 +7,8 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn set_bootstrap_nodes(mut self, nodes: Vec<SocketAddr>) -> Self {
-        self.bootstrap = Some(nodes);
+    pub fn set_bootstrap_nodes(mut self, nodes: Option<Vec<SocketAddr>>) -> Self {
+        self.bootstrap = nodes;
         self
     }
 

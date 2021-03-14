@@ -12,7 +12,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (bs_addr, bs_task) = run_bootstrap_node(Some(bs_addr)).await?;
     // let bs_addr: SocketAddr = bs_addr.to_socket_addrs().unwrap().next().unwrap();
 
-    let config = Config::default().set_bootstrap_nodes(vec![bs_addr]);
+    let config = Config::default().set_bootstrap_nodes(Some(vec![bs_addr]));
 
     let mut swarm1 = Hyperswarm::bind(config.clone()).await?;
     let mut swarm2 = Hyperswarm::bind(config).await?;

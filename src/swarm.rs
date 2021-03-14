@@ -242,12 +242,14 @@ mod test {
 
     #[async_std::test]
     async fn test_swarm() -> Result<()> {
+        env_logger::init();
         let (bs_addr, _bs_task) = run_bootstrap_node::<SocketAddr>(None).await?;
-        let config = Config::default().set_bootstrap_nodes(vec![bs_addr]);
+        eprintln!("bootstrap node on {}", bs_addr);
+        let config = Config::default().set_bootstrap_nodes(Some(vec![bs_addr]));
         let mut swarm_a = Hyperswarm::bind(config.clone()).await?;
+        eprintln!("A {:?}", swarm_a);
         let mut swarm_b = Hyperswarm::bind(config).await?;
-        // eprintln!("A {:?}", swarm_a);
-        // eprintln!("B {:?}", swarm_b);
+        eprintln!("B {:?}", swarm_b);
 
         let topic = [0u8; 32];
         let config = TopicConfig::both();
@@ -259,7 +261,11 @@ mod test {
             while let Some(stream) = swarm_a.next().await {
                 let mut stream = stream.unwrap();
                 stream.write_all(b"A").await.unwrap();
-                // eprintln!("A incoming: {:?}", stream);
+                eprintln!(
+                    "A incoming: method {} init {}",
+                    stream.protocol(),
+                    stream.is_initiator()
+                );
                 let n = stream.read(&mut buf).await.unwrap();
                 assert_eq!(n, 1);
                 assert_eq!(&buf[..n], b"B");
@@ -272,8 +278,13 @@ mod test {
             let mut buf = vec![0u8, 1];
             while let Some(stream) = swarm_b.next().await {
                 let mut stream = stream.unwrap();
-                stream.write_all(b"B").await.unwrap();
                 // eprintln!("B incoming: {:?}", stream);
+                eprintln!(
+                    "B incoming: method {} init {}",
+                    stream.protocol(),
+                    stream.is_initiator()
+                );
+                stream.write_all(b"B").await.unwrap();
                 let n = stream.read(&mut buf).await.unwrap();
                 assert_eq!(n, 1);
                 assert_eq!(&buf[..n], b"A");

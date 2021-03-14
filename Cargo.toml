@@ -33,6 +33,9 @@ libutp-rs = { git = "https://github.com/Frando/libutp-rs.git", branch = "feat/cl
 [dev-dependencies]
 env_logger = "0.8.3"
 async-std = { version = "1.9.0", features = ["unstable", "attributes"] }
+clap = "3.0.0-beta.2"
+rand = "0.8.3"
+blake2-rfc = "0.2.18"
 
 # [patch.crates-io]
 # hyperswarm-dht = { path = "../hyperswarm-dht" }
