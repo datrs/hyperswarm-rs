@@ -1,0 +1,13 @@
+[package]
+name = "hyperswarm-bootstrap"
+version = "0.1.0"
+authors = ["Franz Heinzmann (Frando) <frando@unbiskant.org>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+hyperswarm = { path = ".." }
+async-std = { version = "1.9.0", features = ["unstable"] }
+env_logger = "0.8.3"
+clap = "3.0.0-beta.2"
