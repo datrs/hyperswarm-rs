@@ -14,7 +14,7 @@ authors = [
 ]
 
 [features]
-default=["transport_utp"]
+default = ["transport_utp"]
 transport_utp = ["libutp-rs"]
 
 [dependencies]

@@ -59,11 +59,6 @@ impl Stream for UtpTransport {
         }
 
         let connect = Pin::new(&mut self.pending_connects).poll_next(cx);
-        eprintln!(
-            "UTP CONNECT {:?} (pending {})",
-            connect,
-            self.pending_connects.len()
-        );
         if let Some(conn) = into_connection(connect, true) {
             // eprintln!("UTP CONNECT {:?}", conn);
             return Poll::Ready(Some(conn));
