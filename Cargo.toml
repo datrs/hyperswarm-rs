@@ -17,7 +17,6 @@ authors = [
 default=["transport_utp"]
 transport_utp = ["libutp-rs"]
 
-
 [dependencies]
 async-std = { version = "1.9.0", features = ["unstable"] }
 futures-lite = "1.11.3"

@@ -1,8 +1,6 @@
 use async_compat::Compat;
-use async_trait::async_trait;
 use futures::stream::FuturesUnordered;
-use futures_lite::StreamExt;
-use futures_lite::{AsyncRead, AsyncWrite};
+use futures_lite::{AsyncRead, AsyncWrite, Stream};
 use libutp_rs::{Connect as ConnectFut, UtpContext, UtpListener, UtpSocket};
 use std::fmt;
 use std::io;
@@ -42,19 +40,18 @@ impl UtpTransport {
     }
 }
 
-#[async_trait]
 impl Transport for UtpTransport {
     type Connection = UtpStream;
     fn connect(&mut self, peer_addr: SocketAddr) {
-        // eprintln!("UTP CONNECT START {}", peer_addr);
+        eprintln!("UTP CONNECT START {}", peer_addr);
         let fut = self.context.connect(peer_addr);
         self.pending_connects.push(fut);
     }
+}
 
-    fn poll_next(
-        mut self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-    ) -> Poll<Option<io::Result<Connection<Self::Connection>>>> {
+impl Stream for UtpTransport {
+    type Item = io::Result<Connection<<Self as Transport>::Connection>>;
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let incoming = Pin::new(&mut self.incoming).poll_next(cx);
         if let Some(conn) = into_connection(incoming, false) {
             // eprintln!("UTP INCOMING {:?}", conn);
@@ -62,6 +59,11 @@ impl Transport for UtpTransport {
         }
 
         let connect = Pin::new(&mut self.pending_connects).poll_next(cx);
+        eprintln!(
+            "UTP CONNECT {:?} (pending {})",
+            connect,
+            self.pending_connects.len()
+        );
         if let Some(conn) = into_connection(connect, true) {
             // eprintln!("UTP CONNECT {:?}", conn);
             return Poll::Ready(Some(conn));

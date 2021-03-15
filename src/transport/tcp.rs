@@ -48,22 +48,21 @@ impl Transport for TcpTransport {
 
     fn connect(&mut self, peer_addr: SocketAddr) {
         let fut = TcpStream::connect(peer_addr);
+        // let fut = connect_delayed(peer_addr);
         self.pending_connects.push(Box::pin(fut));
     }
+}
 
-    fn poll_next(
-        mut self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-    ) -> Poll<Option<io::Result<Connection<Self::Connection>>>> {
+impl Stream for TcpTransport {
+    type Item = io::Result<Connection<<Self as Transport>::Connection>>;
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let incoming = Pin::new(&mut self.incoming).poll_next(cx);
         if let Some(conn) = into_connection(incoming, false) {
-            // eprintln!("TCP INCOMING {:?}", conn);
             return Poll::Ready(Some(conn));
         }
 
         let connect = Pin::new(&mut self.pending_connects).poll_next(cx);
         if let Some(conn) = into_connection(connect, true) {
-            // eprintln!("TCP CONNECT {:?}", conn);
             return Poll::Ready(Some(conn));
         }
         Poll::Pending
@@ -128,3 +127,16 @@ impl fmt::Debug for TcpIncoming {
             .finish()
     }
 }
+
+// async fn connect_delayed(peer_addr: SocketAddr) -> io::Result<TcpStream> {
+//     timeout(100).await;
+//     TcpStream::connect(peer_addr).await
+// }
+
+// async fn timeout(ms: u64) {
+//     let _ = async_std::future::timeout(
+//         std::time::Duration::from_millis(ms),
+//         futures::future::pending::<()>(),
+//     )
+//     .await;
+// }

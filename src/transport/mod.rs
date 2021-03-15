@@ -1,4 +1,5 @@
 use futures::io::{AsyncRead, AsyncWrite};
+use futures::stream::Stream;
 use std::fmt::Debug;
 use std::io;
 use std::net::SocketAddr;
@@ -11,13 +12,15 @@ pub mod tcp;
 #[cfg(feature = "transport_utp")]
 pub mod utp;
 
-pub trait Transport {
+pub trait Transport:
+    Stream<Item = io::Result<Connection<<Self as Transport>::Connection>>>
+{
     type Connection: AsyncRead + AsyncWrite + Send + std::fmt::Debug;
     fn connect(&mut self, peer_addr: SocketAddr);
-    fn poll_next(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-    ) -> Poll<Option<io::Result<Connection<Self::Connection>>>>;
+    // fn poll_next(
+    //     self: Pin<&mut Self>,
+    //     cx: &mut Context<'_>,
+    // ) -> Poll<Option<io::Result<Connection<Self::Connection>>>>;
 }
 
 #[derive(Debug)]

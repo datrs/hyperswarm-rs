@@ -1,6 +1,5 @@
-use async_trait::async_trait;
-use futures_lite::{AsyncRead, AsyncWrite};
-// use log::*;
+use futures_lite::{AsyncRead, AsyncWrite, Stream};
+use log::*;
 use std::collections::HashSet;
 use std::fmt;
 use std::fmt::Debug;
@@ -71,10 +70,10 @@ impl CombinedTransport {
         T: std::fmt::Debug + AsyncRead + AsyncWrite + Unpin,
         F: Fn(T) -> CombinedStream,
     {
-        let (stream, peer_addr, is_initiator, protocol) = conn.into_parts();
-        let stream = map(stream);
-        let conn = Connection::new(stream, peer_addr, is_initiator, protocol);
-        Some(Ok(conn))
+        // let (stream, peer_addr, is_initiator, protocol) = conn.into_parts();
+        // let stream = map(stream);
+        // let conn = Connection::new(stream, peer_addr, is_initiator, protocol);
+        // Some(Ok(conn))
 
         // TODO:
         // The code above leads to establishing BOTH a utp and a tcp connection.
@@ -84,22 +83,35 @@ impl CombinedTransport {
         // needs some more thought.
 
         // let addr_without_port = peer_addr.set_port(0);
-        // if !self.connected.contains(&peer_addr) {
-        //     self.connected.insert(peer_addr.clone());
-        //     let stream = map(stream);
-        //     let conn = Connection::new(stream, peer_addr, is_initiator, protocol);
-        //     Some(Ok(conn))
-        // } else {
-        //     debug!(
-        //         "skip double connection to {} via {} (init {})",
-        //         peer_addr, protocol, is_initiator
-        //     );
-        //     None
-        // }
+        let (stream, peer_addr, is_initiator, protocol) = conn.into_parts();
+        let take_connection = if !is_initiator {
+            true
+        } else {
+            if !self.connected.contains(&peer_addr) {
+                self.connected.insert(peer_addr.clone());
+                true
+            } else {
+                false
+            }
+        };
+        if take_connection {
+            debug!(
+                "new connection to {} via {} (init {})",
+                peer_addr, protocol, is_initiator
+            );
+            let stream = map(stream);
+            let conn = Connection::new(stream, peer_addr, is_initiator, protocol);
+            Some(Ok(conn))
+        } else {
+            debug!(
+                "skip double connection to {} via {} (init {})",
+                peer_addr, protocol, is_initiator
+            );
+            None
+        }
     }
 }
 
-#[async_trait]
 impl Transport for CombinedTransport {
     type Connection = CombinedStream;
     fn connect(&mut self, peer_addr: SocketAddr) {
@@ -107,11 +119,11 @@ impl Transport for CombinedTransport {
         #[cfg(feature = "transport_utp")]
         self.utp.connect(peer_addr);
     }
+}
 
-    fn poll_next(
-        mut self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-    ) -> Poll<Option<io::Result<Connection<Self::Connection>>>> {
+impl Stream for CombinedTransport {
+    type Item = io::Result<Connection<<Self as Transport>::Connection>>;
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let tcp_next = Pin::new(&mut self.tcp).poll_next(cx);
         if let Some(res) = self.on_poll_connection(tcp_next, CombinedStream::Tcp) {
             return Poll::Ready(Some(res));
@@ -139,6 +151,7 @@ impl Debug for CombinedStream {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let name = match self {
             Self::Tcp(_) => "Tcp",
+            #[cfg(feature = "transport_utp")]
             Self::Utp(_) => "Utp",
         };
         write!(f, "CombinedStream::{}", name)
@@ -205,4 +218,42 @@ impl AsyncWrite for CombinedStream {
             CombinedStream::Utp(ref mut stream) => Pin::new(stream).poll_close(cx),
         }
     }
+}
+
+#[cfg(test)]
+mod tests {
+    // use std::net::{IpAddr, Ipv4Addr};
+    // use super::*;
+    // use async_std::stream::StreamExt;
+    // use async_std::task;
+
+    // #[async_std::test]
+    // async fn test_combined() -> io::Result<()> {
+    //     env_logger::init();
+    //     let mut ta = CombinedTransport::bind("localhost:0").await?;
+    //     let mut tb = CombinedTransport::bind("localhost:0").await?;
+    //     let addr_a = ta.local_addr();
+    //     let addr_b = tb.local_addr();
+    //     eprintln!("ta {:?}", ta);
+    //     eprintln!("tb {:?}", tb);
+
+    //     ta.connect(addr_b);
+    //     tb.connect(addr_a);
+
+    //     let task1 = task::spawn(async move {
+    //         while let Some(stream) = ta.next().await {
+    //             eprintln!("ta in: {:?}", stream);
+    //         }
+    //     });
+
+    //     let task2 = task::spawn(async move {
+    //         while let Some(stream) = tb.next().await {
+    //             eprintln!("tb in: {:?}", stream);
+    //         }
+    //     });
+
+    //     task1.await;
+    //     task2.await;
+    //     Ok(())
+    // }
 }

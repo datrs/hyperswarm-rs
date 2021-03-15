@@ -56,6 +56,7 @@ impl Hyperswarm {
 
     pub fn configure(&mut self, topic: Topic, config: TopicConfig) {
         let old = self.topics.remove(&topic).unwrap_or_default();
+        debug!("configure swarm: {} {:?}", hex::encode(topic), config);
         if config.announce && !old.announce {
             self.discovery.announce(topic);
         }
@@ -130,12 +131,12 @@ mod test {
     async fn test_swarm() -> Result<()> {
         env_logger::init();
         let (bs_addr, _bs_task) = run_bootstrap_node::<SocketAddr>(None).await?;
-        eprintln!("bootstrap node on {}", bs_addr);
+        // eprintln!("bootstrap node on {}", bs_addr);
         let config = Config::default().set_bootstrap_nodes(Some(vec![bs_addr]));
         let mut swarm_a = Hyperswarm::bind(config.clone()).await?;
-        eprintln!("A {:?}", swarm_a);
+        // eprintln!("A {:?}", swarm_a);
         let mut swarm_b = Hyperswarm::bind(config).await?;
-        eprintln!("B {:?}", swarm_b);
+        // eprintln!("B {:?}", swarm_b);
 
         let topic = [0u8; 32];
         let config = TopicConfig::both();
@@ -143,48 +144,58 @@ mod test {
         swarm_b.configure(topic, config.clone());
 
         let (done1_tx, mut done1_rx) = channel::bounded(1);
-        let _task_a = task::spawn(async move {
+        let task_a = task::spawn(async move {
             while let Some(stream) = swarm_a.next().await {
+                eprintln!("A: NEW STREAM {:?}", stream);
                 let mut stream = stream.unwrap();
                 let done_tx = done1_tx.clone();
                 task::spawn(async move {
                     let mut buf = vec![0u8; 1];
+                    // eprintln!(
+                    //     "A WRITE start: method {} init {}",
+                    //     stream.protocol(),
+                    //     stream.is_initiator()
+                    // );
                     stream.write_all(b"A").await.unwrap();
-                    eprintln!(
-                        "A incoming: method {} init {}",
-                        stream.protocol(),
-                        stream.is_initiator()
-                    );
+                    // eprintln!(
+                    //     "A WROTE fin: method {} init {}",
+                    //     stream.protocol(),
+                    //     stream.is_initiator()
+                    // );
                     let n = stream.read(&mut buf).await.unwrap();
                     assert_eq!(n, 1);
                     assert_eq!(&buf[..n], b"B");
-                    eprintln!("A res {:?} buf {:?}", n, &buf);
+                    // eprintln!("A res {:?} buf {:?}", n, &buf);
                     let _ = done_tx.send(()).await;
                 });
             }
         });
 
-        // wait 100ms so that the first swarm properly announced to the DHT.
-        timeout(100).await;
+        // wait 50ms so that the first swarm properly announced to the DHT.
+        timeout(50).await;
 
         let (done2_tx, mut done2_rx) = channel::bounded(1);
-        let _task_b = task::spawn(async move {
+        let task_b = task::spawn(async move {
             while let Some(stream) = swarm_b.next().await {
                 let mut stream = stream.unwrap();
                 let done_tx = done2_tx.clone();
                 task::spawn(async move {
                     let mut buf = vec![0u8, 1];
-                    // eprintln!("B incoming: {:?}", stream);
-                    eprintln!(
-                        "B incoming: method {} init {}",
-                        stream.protocol(),
-                        stream.is_initiator()
-                    );
+                    // eprintln!(
+                    //     "B WRITE start: method {} init {}",
+                    //     stream.protocol(),
+                    //     stream.is_initiator()
+                    // );
                     stream.write_all(b"B").await.unwrap();
+                    // eprintln!(
+                    //     "B WRITE fin: method {} init {}",
+                    //     stream.protocol(),
+                    //     stream.is_initiator()
+                    // );
                     let n = stream.read(&mut buf).await.unwrap();
                     assert_eq!(n, 1);
                     assert_eq!(&buf[..n], b"A");
-                    eprintln!("B res {:?} buf {:?}", n, &buf);
+                    // eprintln!("B res {:?} buf {:?}", n, &buf);
                     let _ = done_tx.send(()).await;
                     // done_tx.send(()).await.unwrap();
                 });
@@ -193,9 +204,10 @@ mod test {
 
         done1_rx.next().await.unwrap();
         done2_rx.next().await.unwrap();
+        task_a.cancel().await;
+        task_b.cancel().await;
         // task_a.await;
         // task_b.await;
-        // bs_task.await?;
         Ok(())
     }
 

@@ -103,6 +103,7 @@ impl Stream for DhtDiscovery {
             let event = event.unwrap();
             match event {
                 HyperDhtEvent::Bootstrapped { .. } => {
+                    debug!("DHT bootstrapped!");
                     self.bootstrapped = true;
                 }
                 HyperDhtEvent::AnnounceResult { .. } => {}
