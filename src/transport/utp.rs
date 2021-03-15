@@ -43,7 +43,6 @@ impl UtpTransport {
 impl Transport for UtpTransport {
     type Connection = UtpStream;
     fn connect(&mut self, peer_addr: SocketAddr) {
-        eprintln!("UTP CONNECT START {}", peer_addr);
         let fut = self.context.connect(peer_addr);
         self.pending_connects.push(fut);
     }
@@ -54,13 +53,11 @@ impl Stream for UtpTransport {
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let incoming = Pin::new(&mut self.incoming).poll_next(cx);
         if let Some(conn) = into_connection(incoming, false) {
-            // eprintln!("UTP INCOMING {:?}", conn);
             return Poll::Ready(Some(conn));
         }
 
         let connect = Pin::new(&mut self.pending_connects).poll_next(cx);
         if let Some(conn) = into_connection(connect, true) {
-            // eprintln!("UTP CONNECT {:?}", conn);
             return Poll::Ready(Some(conn));
         }
         Poll::Pending
