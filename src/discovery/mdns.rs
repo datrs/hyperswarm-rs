@@ -2,6 +2,7 @@ use async_std::channel;
 use async_std::stream::Stream;
 use async_std::task::{Context, Poll};
 use colmeia_hyperswarm_mdns::{self_id, Announcer, Locator};
+use futures::FutureExt;
 use futures_lite::ready;
 // use log::*;
 use std::convert::TryInto;
@@ -108,29 +109,26 @@ impl Stream for MdnsDiscovery {
             return Poll::Ready(Some(Err(e)));
         }
 
-        if let Poll::Ready(Some(_command)) = Pin::new(&mut this.pending_commands_rx).poll_next(cx) {
-            // TODO: Boxing the add_topic future does not work because there's no valid
-            // lifetime. Best would be to make the add_topic functions sync, or return
-            // a future that can be boxed.
-            // let fut = match command {
-            //     Command::Lookup(topic) => {
-            //         let fut = this.locator.add_topic(&topic);
-            //         let fut = fut.map(|r| {
-            //             r.map_err(|e| io::Error::new(io::ErrorKind::Other, format!("{}", e)))
-            //         });
-            //         let fut: CommandFut = fut.boxed();
-            //         fut
-            //     }
-            //     Command::Announce(topic) => {
-            //         let fut = this.announcer.add_topic(&topic);
-            //         let fut = fut.map(|r| {
-            //             r.map_err(|e| io::Error::new(io::ErrorKind::Other, format!("{}", e)))
-            //         });
-            //         let fut: CommandFut = fut.boxed();
-            //         fut
-            //     }
-            // };
-            // this.pending_future = Some(fut);
+        if let Poll::Ready(Some(command)) = Pin::new(&mut this.pending_commands_rx).poll_next(cx) {
+            let fut = match command {
+                Command::Lookup(topic) => {
+                    let fut = this.locator.add_topic(topic.to_vec());
+                    let fut = fut.map(|r| {
+                        r.map_err(|e| io::Error::new(io::ErrorKind::Other, format!("{}", e)))
+                    });
+                    let fut: CommandFut = fut.boxed();
+                    fut
+                }
+                Command::Announce(topic) => {
+                    let fut = this.announcer.add_topic(topic.to_vec());
+                    let fut = fut.map(|r| {
+                        r.map_err(|e| io::Error::new(io::ErrorKind::Other, format!("{}", e)))
+                    });
+                    let fut: CommandFut = fut.boxed();
+                    fut
+                }
+            };
+            this.pending_future = Some(fut);
         }
 
         if let Err(e) = ready!(this.poll_pending_future(cx)) {
