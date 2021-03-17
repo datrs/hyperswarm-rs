@@ -113,6 +113,7 @@ impl CombinedTransport {
 }
 
 impl Transport for CombinedTransport {
+    // ????
     type Connection = CombinedStream;
     fn connect(&mut self, peer_addr: SocketAddr) {
         self.tcp.connect(peer_addr);

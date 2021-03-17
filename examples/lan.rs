@@ -3,19 +3,21 @@ use async_std::stream::StreamExt;
 use async_std::task;
 // use std::net::{SocketAddr, ToSocketAddrs};
 
-use hyperswarm::{run_bootstrap_node, DhtOptions, Hyperswarm, HyperswarmStream, TopicConfig};
+use hyperswarm::{
+    discovery::mdns::MdnsDiscovery, DhtOptions, Hyperswarm, HyperswarmStream, TopicConfig,
+};
 
 #[async_std::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::init();
-    let bs_addr = "localhost:6060";
-    let (bs_addr, bs_task) = run_bootstrap_node(Some(bs_addr)).await?;
-    // let bs_addr: SocketAddr = bs_addr.to_socket_addrs().unwrap().next().unwrap();
 
-    let config = DhtOptions::default().set_bootstrap_nodes(Some(vec![bs_addr]));
+    let transport = Hyperswarm::listen().await?;
+    let discovery = MdnsDiscovery::bind(transport.local_addr().port()).await?;
+    let mut swarm1 = Hyperswarm::with(transport, discovery);
 
-    let mut swarm1 = Hyperswarm::bind(config.clone()).await?;
-    let mut swarm2 = Hyperswarm::bind(config).await?;
+    let transport = Hyperswarm::listen().await?;
+    let discovery = MdnsDiscovery::bind(transport.local_addr().port()).await?;
+    let mut swarm2 = Hyperswarm::with(transport, discovery);
 
     let handle1 = swarm1.handle();
     let handle2 = swarm2.handle();
@@ -40,7 +42,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     task1.await;
     task2.await;
-    bs_task.await?;
 
     Ok(())
 }

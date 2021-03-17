@@ -8,7 +8,7 @@ use std::io;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
-use crate::config::Config;
+use crate::DhtOptions;
 
 use super::{Discovery, DiscoveryMethod, PeerInfo, Topic};
 
@@ -37,7 +37,7 @@ enum Command {
 }
 
 impl DhtDiscovery {
-    pub async fn bind(local_port: u16, config: Config) -> io::Result<Self> {
+    pub async fn bind(local_port: u16, config: DhtOptions) -> io::Result<Self> {
         let dht_config = DhtConfig::default();
         let dht_config = if let Some(bootstrap) = config.bootstrap.as_ref() {
             dht_config.set_bootstrap_nodes(bootstrap)

@@ -12,10 +12,12 @@ pub mod tcp;
 #[cfg(feature = "transport_utp")]
 pub mod utp;
 
+pub trait DynamicConnection: AsyncRead + AsyncWrite + Send + std::fmt::Debug {}
+
 pub trait Transport:
     Stream<Item = io::Result<Connection<<Self as Transport>::Connection>>>
 {
-    type Connection: AsyncRead + AsyncWrite + Send + std::fmt::Debug;
+    type Connection: DynamicConnection;
     fn connect(&mut self, peer_addr: SocketAddr);
     // fn poll_next(
     //     self: Pin<&mut Self>,
