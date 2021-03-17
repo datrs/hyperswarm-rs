@@ -1,12 +1,12 @@
 use std::net::SocketAddr;
 
 #[derive(Debug, Default, Clone)]
-pub struct Config {
+pub struct DhtOptions {
     pub bootstrap: Option<Vec<SocketAddr>>,
     pub ephemeral: bool,
 }
 
-impl Config {
+impl DhtOptions {
     pub fn set_bootstrap_nodes(mut self, nodes: Option<Vec<SocketAddr>>) -> Self {
         self.bootstrap = nodes;
         self

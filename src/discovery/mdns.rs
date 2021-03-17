@@ -12,8 +12,6 @@ use std::io;
 use std::pin::Pin;
 use std::time::Duration;
 
-use crate::Config;
-
 use super::{Discovery, DiscoveryMethod, PeerInfo, Topic};
 
 mod socket {
@@ -53,7 +51,7 @@ impl fmt::Debug for MdnsDiscovery {
 }
 
 impl MdnsDiscovery {
-    pub async fn bind(local_port: u16, _config: Config) -> io::Result<Self> {
+    pub async fn bind(local_port: u16) -> io::Result<Self> {
         let self_id = self_id();
         let socket = socket::create()?;
         let lookup_interval = Duration::from_secs(60);

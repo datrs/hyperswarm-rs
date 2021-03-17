@@ -7,7 +7,7 @@ use std::task::{Context, Poll};
 use super::dht::DhtDiscovery;
 use super::mdns::MdnsDiscovery;
 use super::{Discovery, PeerInfo, Topic};
-use crate::config::Config;
+use crate::config::DhtOptions;
 
 #[derive(Debug)]
 pub struct CombinedDiscovery {
@@ -16,8 +16,8 @@ pub struct CombinedDiscovery {
 }
 
 impl CombinedDiscovery {
-    pub async fn bind(local_port: u16, config: Config) -> io::Result<Self> {
-        let mdns = MdnsDiscovery::bind(local_port, config.clone()).await?;
+    pub async fn bind(local_port: u16, config: DhtOptions) -> io::Result<Self> {
+        let mdns = MdnsDiscovery::bind(local_port).await?;
         let dht = DhtDiscovery::bind(local_port, config).await?;
         Ok(Self { mdns, dht })
     }

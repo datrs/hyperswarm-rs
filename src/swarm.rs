@@ -1,4 +1,5 @@
 use async_std::channel;
+use futures::{AsyncRead, AsyncWrite, StreamExt};
 use futures_lite::Stream;
 use log::*;
 use std::collections::HashMap;
@@ -7,7 +8,7 @@ use std::io;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
-use crate::config::{Config, TopicConfig};
+use crate::{config::{DhtOptions, TopicConfig}, transport::DynamicConnection};
 use crate::discovery::Topic;
 use crate::discovery::{combined::CombinedDiscovery, Discovery};
 use crate::transport::{
@@ -19,8 +20,15 @@ type ConfigureCommand = (Topic, TopicConfig);
 
 pub struct Hyperswarm {
     topics: HashMap<Topic, TopicConfig>,
-    discovery: CombinedDiscovery,
-    transport: CombinedTransport,
+    discovery: Box<dyn Discovery + Send + Unpin>,
+    // Error: Transport requires specifing Connection
+    transport: Box<
+        dyn Transport<
+                Connection = Box<dyn DynamicConnection>,
+                Item = io::Result<Box<dyn DynamicConnection>>
+            > + Send
+            + Unpin,
+    >,
     command_tx: channel::Sender<ConfigureCommand>,
     command_rx: channel::Receiver<ConfigureCommand>,
 }
@@ -28,14 +36,32 @@ impl fmt::Debug for Hyperswarm {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Hyperswarm")
             .field("topics", &self.topics)
-            .field("discovery", &self.discovery)
-            .field("transport", &self.transport)
             .finish()
     }
 }
 
 impl Hyperswarm {
-    pub async fn bind(config: Config) -> io::Result<Self> {
+    pub async fn listen() -> io::Result<impl Transport> {
+        let local_addr = "localhost:0";
+        CombinedTransport::bind(local_addr).await
+    }
+
+    pub fn with(
+        transport: impl Transport + Send + Unpin,
+        discovery: impl Discovery + Send + Unpin,
+    ) -> Self {
+        let (command_tx, command_rx) = channel::unbounded::<ConfigureCommand>();
+
+        Self {
+            topics: HashMap::new(),
+            discovery: Box::new(discovery),
+            transport: Box::new(transport),
+            command_tx,
+            command_rx,
+        }
+    }
+
+    pub async fn bind(config: DhtOptions) -> io::Result<Self> {
         let local_addr = "localhost:0";
 
         let transport = CombinedTransport::bind(local_addr).await?;
@@ -43,15 +69,7 @@ impl Hyperswarm {
         let port = local_addr.port();
         let discovery = CombinedDiscovery::bind(port, config).await?;
 
-        let (command_tx, command_rx) = channel::unbounded::<ConfigureCommand>();
-
-        Ok(Self {
-            topics: HashMap::new(),
-            discovery,
-            transport,
-            command_tx,
-            command_rx,
-        })
+        Ok(Self::with(transport, discovery))
     }
 
     pub fn configure(&mut self, topic: Topic, config: TopicConfig) {
@@ -86,7 +104,7 @@ impl SwarmHandle {
 }
 
 impl Stream for Hyperswarm {
-    type Item = io::Result<Connection<CombinedStream>>;
+    type Item = io::Result<Box<dyn DynamicConnection>>;
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let this = self.get_mut();
 
@@ -104,7 +122,7 @@ impl Stream for Hyperswarm {
         }
 
         // Poll discovery results.
-        let discovery = Pin::new(&mut this.discovery).poll_next(cx);
+        let discovery = Pin::new(&mut this.discovery).poll_next_unpin(cx);
         match discovery {
             Poll::Pending | Poll::Ready(None) => {}
             Poll::Ready(Some(Err(e))) => return Poll::Ready(Some(Err(e))),
@@ -119,7 +137,7 @@ impl Stream for Hyperswarm {
 
 #[cfg(test)]
 mod test {
-    use super::{Config, Hyperswarm, TopicConfig};
+    use super::{DhtOptions, Hyperswarm, TopicConfig};
     use crate::run_bootstrap_node;
     use async_std::channel;
     use async_std::task;
@@ -132,7 +150,7 @@ mod test {
         env_logger::init();
         let (bs_addr, _bs_task) = run_bootstrap_node::<SocketAddr>(None).await?;
         // eprintln!("bootstrap node on {}", bs_addr);
-        let config = Config::default().set_bootstrap_nodes(Some(vec![bs_addr]));
+        let config = DhtOptions::default().set_bootstrap_nodes(Some(vec![bs_addr]));
         let mut swarm_a = Hyperswarm::bind(config.clone()).await?;
         // eprintln!("A {:?}", swarm_a);
         let mut swarm_b = Hyperswarm::bind(config).await?;

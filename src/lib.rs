@@ -18,7 +18,7 @@ pub mod discovery;
 pub mod transport;
 
 pub use bootstrap::run_bootstrap_node;
-pub use config::{Config, TopicConfig};
+pub use config::{DhtOptions, TopicConfig};
 pub use swarm::Hyperswarm;
 
 use transport::combined::CombinedStream;
