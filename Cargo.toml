@@ -29,7 +29,7 @@ multicast-socket = "0.2.1"
 hex = "0.4.3"
 pretty-hash = "0.4.1"
 hyperswarm-dht = { git = "https://github.com/Frando/hyperswarm-dht.git", branch = "hyperspace" }
-colmeia-hyperswarm-mdns = { git = "https://github.com/bltavares/colmeia.git", rev = "e92ab71981356197a21592b7ce6854e209582985" }
+colmeia-hyperswarm-mdns = { git = "https://github.com/bltavares/colmeia.git", rev = "53761799f7a9ee123875534e0108d7483a117885" }
 libutp-rs = { git = "https://github.com/Frando/libutp-rs.git", branch = "feat/clone", optional = true }
 
 [dev-dependencies]
