@@ -15,7 +15,7 @@ authors = [
 
 [features]
 default = ["transport_utp"]
-transport_utp = ["libutp-rs"]
+transport_utp = ["async-std-utp"]
 
 [dependencies]
 async-std = { version = "1.9.0", features = ["unstable"] }
@@ -30,7 +30,7 @@ hex = "0.4.3"
 pretty-hash = "0.4.1"
 hyperswarm-dht = { git = "https://github.com/Frando/hyperswarm-dht.git", branch = "hyperspace" }
 colmeia-hyperswarm-mdns = { git = "https://github.com/bltavares/colmeia.git", rev = "e92ab71981356197a21592b7ce6854e209582985" }
-libutp-rs = { git = "https://github.com/Frando/libutp-rs.git", branch = "feat/clone", optional = true }
+async-std-utp = { version = "0.1.1", optional = true }
 
 [dev-dependencies]
 env_logger = "0.8.3"
