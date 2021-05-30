@@ -163,7 +163,7 @@ impl CombinedStream {
         match self {
             Self::Tcp(stream) => stream.peer_addr().unwrap(),
             #[cfg(feature = "transport_utp")]
-            Self::Utp(stream) => stream.peer_addr(),
+            Self::Utp(stream) => stream.peer_addr().unwrap(),
         }
     }
 
