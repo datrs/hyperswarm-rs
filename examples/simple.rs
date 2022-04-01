@@ -1,53 +1,72 @@
 use async_std::prelude::*;
 use async_std::stream::StreamExt;
-use async_std::task;
-// use std::net::{SocketAddr, ToSocketAddrs};
+use async_std::task::{self, JoinHandle};
+use std::io;
+use std::net::{SocketAddr, ToSocketAddrs};
 
-use hyperswarm::{run_bootstrap_node, Config, Hyperswarm, HyperswarmStream, TopicConfig};
+const DEFAULT_BOOTSTRAP: &str = "localhost:6060";
+
+use hyperswarm::{BootstrapNode, Config, Hyperswarm, HyperswarmStream, TopicConfig};
 
 #[async_std::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::init();
-    let bs_addr = "localhost:6060";
-    let (bs_addr, bs_task) = run_bootstrap_node(Some(bs_addr)).await?;
-    // let bs_addr: SocketAddr = bs_addr.to_socket_addrs().unwrap().next().unwrap();
-
-    let config = Config::default().set_bootstrap_nodes(Some(vec![bs_addr]));
-
-    let mut swarm1 = Hyperswarm::bind(config.clone()).await?;
-    let mut swarm2 = Hyperswarm::bind(config).await?;
-
-    let handle1 = swarm1.handle();
-    let handle2 = swarm2.handle();
-
-    let task1 = task::spawn(async move {
-        while let Some(stream) = swarm1.next().await {
-            let stream = stream.unwrap();
-            on_connection(stream, "rust1".into());
+    let bs_addr = std::env::var("BOOTSTRAP");
+    let bs_addr = match bs_addr {
+        Err(_) => {
+            let (addr, _task) = BootstrapNode::with_addr(DEFAULT_BOOTSTRAP)?.run().await?;
+            eprintln!("running bootstrap node on {}", addr);
+            addr.to_string()
         }
-    });
-
-    let task2 = task::spawn(async move {
-        while let Some(stream) = swarm2.next().await {
-            let stream = stream.unwrap();
-            on_connection(stream, "rust2".into());
+        Ok(addr) => {
+            if &addr == "default" {
+                DEFAULT_BOOTSTRAP.to_string()
+            } else {
+                addr
+            }
         }
-    });
+    };
+    eprintln!("using bootstrap address: {}", bs_addr);
+    let name = std::env::var("NAME").unwrap_or("rust".to_string());
+    let count: u32 = std::env::var("COUNT").unwrap_or("2".to_string()).parse()?;
+    let bs_addr: SocketAddr = bs_addr.to_socket_addrs().unwrap().next().unwrap();
 
-    let topic = [0u8; 32];
-    handle1.configure(topic, TopicConfig::both());
-    handle2.configure(topic, TopicConfig::both());
+    let mut tasks = vec![];
 
-    task1.await;
-    task2.await;
-    bs_task.await?;
+    for i in 0..count {
+        let config = Config::default().set_bootstrap_nodes(&[bs_addr]);
+        let task = run_node(config, format!("{}.{}", name, i).to_string()).await?;
+        eprintln!("running node {}.{}", name, i);
+        tasks.push(task);
+    }
+
+    for task in tasks {
+        task.await;
+    }
 
     Ok(())
 }
 
+async fn run_node(config: Config, name: String) -> io::Result<JoinHandle<()>> {
+    let mut swarm = Hyperswarm::bind(config).await?;
+
+    let handle = swarm.handle();
+
+    let task = task::spawn(async move {
+        while let Some(stream) = swarm.next().await {
+            let stream = stream.unwrap();
+            on_connection(stream, name.clone());
+        }
+    });
+
+    let topic = [0u8; 32];
+    handle.configure(topic, TopicConfig::both());
+    Ok(task)
+}
+
 fn on_connection(mut stream: HyperswarmStream, local_name: String) {
     let label = format!(
-        "[{} -> {}://{}]",
+        "[{}] <{}://{}>",
         local_name,
         stream.protocol(),
         stream.peer_addr()
@@ -63,7 +82,7 @@ fn on_connection(mut stream: HyperswarmStream, local_name: String) {
             match stream.read(&mut buf).await {
                 Ok(n) if n > 0 => {
                     let text = String::from_utf8(buf[..n].to_vec()).unwrap();
-                    eprintln!("{} read: {}", label, text);
+                    eprintln!("{} message: {}", label, text);
                 }
                 Ok(_) => {
                     eprintln!("{} close", label);
