@@ -24,8 +24,8 @@ impl Config {
     }
 
     pub fn with_defaults(mut self) -> Self {
-        self.mdns = self.mdns.or_else(|| Default::default());
-        self.dht = self.dht.or_else(|| Default::default());
+        self.mdns = self.mdns.or_else(Default::default);
+        self.dht = self.dht.or_else(Default::default);
         self
     }
 

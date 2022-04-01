@@ -71,7 +71,7 @@ async fn main() -> anyhow::Result<()> {
             } else {
                 config
             };
-            let name = join_opts.name.unwrap_or_else(|| random_name());
+            let name = join_opts.name.unwrap_or_else(random_name);
             eprintln!("your name: {}", name);
 
             // Bind and open swarm.
@@ -279,7 +279,7 @@ async fn connection_loop(
 
 pub fn hash_topic(key: &[u8]) -> [u8; 32] {
     let mut hasher = Blake2b::with_key(32, key);
-    hasher.update(&DISCOVERY_NS_BUF);
+    hasher.update(DISCOVERY_NS_BUF);
     hasher.finalize().as_bytes().try_into().unwrap()
 }
 

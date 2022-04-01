@@ -10,7 +10,7 @@ use std::task::{Context, Poll};
 
 use super::{Connection, Transport};
 
-const PROTOCOL: &'static str = "utp";
+const PROTOCOL: &str = "utp";
 
 pub struct UtpTransport {
     context: UtpContext,

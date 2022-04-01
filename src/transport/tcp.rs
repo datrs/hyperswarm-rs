@@ -13,7 +13,7 @@ use super::{Connection, Transport};
 
 pub type ConnectFut = Pin<Box<dyn Future<Output = io::Result<TcpStream>> + Send + 'static>>;
 
-const PROTOCOL: &'static str = "tcp";
+const PROTOCOL: &str = "tcp";
 
 #[derive(Debug)]
 pub struct TcpTransport {

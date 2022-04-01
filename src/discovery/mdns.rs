@@ -90,7 +90,7 @@ impl fmt::Debug for MdnsDiscovery {
 
 impl MdnsDiscovery {
     pub async fn bind(config: MdnsConfig, announce_port: u16) -> io::Result<Self> {
-        let self_id = config.id.unwrap_or_else(|| IdBytes::random());
+        let self_id = config.id.unwrap_or_else(IdBytes::random);
         let socket = socket::create()?;
         let locator = Locator::listen(socket, config.lookup_interval, &self_id.0);
         let socket = socket::create()?;

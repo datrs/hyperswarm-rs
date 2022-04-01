@@ -103,13 +103,11 @@ impl CombinedTransport {
         let (stream, peer_addr, is_initiator, protocol) = conn.into_parts();
         let take_connection = if !is_initiator {
             true
+        } else if !self.connected.contains(&peer_addr) {
+            self.connected.insert(peer_addr);
+            true
         } else {
-            if !self.connected.contains(&peer_addr) {
-                self.connected.insert(peer_addr.clone());
-                true
-            } else {
-                false
-            }
+            false
         };
         if take_connection {
             debug!(
