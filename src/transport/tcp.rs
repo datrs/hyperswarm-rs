@@ -31,6 +31,7 @@ impl TcpTransport {
         let listener = TcpListener::bind(addr).await?;
         let addr = listener.local_addr()?;
         let incoming = TcpIncoming::new(listener)?;
+        log::debug!("TCP socket listening on {}", addr);
         Ok(Self {
             addr,
             incoming,

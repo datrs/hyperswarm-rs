@@ -15,6 +15,15 @@ pub enum DiscoveryMethod {
     Dht,
 }
 
+impl fmt::Display for DiscoveryMethod {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            DiscoveryMethod::Mdns => write!(f, "MDNS"),
+            DiscoveryMethod::Dht => write!(f, "DHT"),
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct PeerInfo {
     addr: SocketAddr,
@@ -32,6 +41,20 @@ impl fmt::Debug for PeerInfo {
             )
             .field("discovery_method", &self.discovery_method)
             .finish()
+    }
+}
+
+impl fmt::Display for PeerInfo {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let topic = &self
+            .topic
+            .map(|t| pretty_hash::fmt(&t).unwrap())
+            .unwrap_or("_".into());
+        write!(
+            f,
+            "Peer {} via {}:{}",
+            self.addr, self.discovery_method, &topic
+        )
     }
 }
 

@@ -32,6 +32,7 @@ impl UtpTransport {
         let addr = local_addr.to_socket_addrs()?.next().unwrap();
         let context = UtpContext::bind(addr)?;
         let incoming = context.listener();
+        log::debug!("UTP socket listening on {}", addr);
         Ok(Self {
             context,
             incoming,

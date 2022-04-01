@@ -23,21 +23,23 @@ futures-lite = "1.11.3"
 futures-channel = "0.3.13"
 log = "0.4.14"
 futures = "0.3.13"
-async-trait = "0.1.42"
-async-compat = "0.1.0"
 multicast-socket = "0.2.1"
 hex = "0.4.3"
 pretty-hash = "0.4.1"
-hyperswarm-dht = { git = "https://github.com/Frando/hyperswarm-dht.git", branch = "hyperspace" }
-colmeia-hyperswarm-mdns = { git = "https://github.com/bltavares/colmeia.git", rev = "e92ab71981356197a21592b7ce6854e209582985" }
-libutp-rs = { git = "https://github.com/Frando/libutp-rs.git", branch = "feat/clone", optional = true }
+hyperswarm-dht = { git = "https://github.com/datrs/hyperswarm-dht.git", branch = "hyperspace" }
+# hyperswarm-dht = { path = "../hyperswarm-dht" }
+colmeia-hyperswarm-mdns = { git = "https://github.com/bltavares/colmeia.git", rev = "53761799f7a9ee123875534e0108d7483a117885" }
+libutp-rs = { git = "https://github.com/Frando/libutp-rs.git", branch = "feat/clone2", optional = true }
+async-trait = "0.1.53"
+async-compat = "0.2.1"
 
 [dev-dependencies]
 env_logger = "0.8.3"
 async-std = { version = "1.9.0", features = ["unstable", "attributes"] }
-clap = "3.0.0-beta.2"
 rand = "0.8.3"
 blake2-rfc = "0.2.18"
+anyhow = "1.0.56"
+clap = { version = "3.1.7", features = ["derive"] }
 
 # [patch.crates-io]
 # hyperswarm-dht = { path = "../hyperswarm-dht" }

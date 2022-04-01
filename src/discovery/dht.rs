@@ -1,6 +1,6 @@
 use async_std::stream::Stream;
 use futures_lite::ready;
-use hyperswarm_dht::{DhtConfig, HyperDht, HyperDhtEvent, QueryOpts};
+use hyperswarm_dht::{HyperDht, HyperDhtEvent, QueryOpts};
 use log::*;
 use std::collections::VecDeque;
 use std::fmt;
@@ -8,15 +8,15 @@ use std::io;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
-use crate::config::Config;
-
 use super::{Discovery, DiscoveryMethod, PeerInfo, Topic};
+
+pub use hyperswarm_dht::DhtConfig;
 
 // #[derive(Debug)]
 pub struct DhtDiscovery {
     state: HyperDht,
     bootstrapped: bool,
-    local_port: u16,
+    announce_port: u16,
     pending_commands: VecDeque<Command>,
     pending_events: VecDeque<PeerInfo>,
 }
@@ -25,7 +25,7 @@ impl fmt::Debug for DhtDiscovery {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("DhtDiscovery")
             .field("bootstrapped", &self.bootstrapped)
-            .field("local_port", &self.local_port)
+            .field("announce_port", &self.announce_port)
             .finish()
     }
 }
@@ -37,18 +37,11 @@ enum Command {
 }
 
 impl DhtDiscovery {
-    pub async fn bind(local_port: u16, config: Config) -> io::Result<Self> {
-        let dht_config = DhtConfig::default();
-        let dht_config = if let Some(bootstrap) = config.bootstrap.as_ref() {
-            dht_config.set_bootstrap_nodes(bootstrap)
-        } else {
-            dht_config
-        };
-        let dht_config = dht_config.set_ephemeral(config.ephemeral);
-        let state = HyperDht::with_config(dht_config).await?;
+    pub async fn bind(config: DhtConfig, announce_port: u16) -> io::Result<Self> {
+        let state = HyperDht::with_config(config).await?;
         let this = Self {
             state,
-            local_port,
+            announce_port,
             bootstrapped: false,
             pending_commands: VecDeque::new(),
             pending_events: VecDeque::new(),
@@ -70,7 +63,7 @@ impl Discovery for DhtDiscovery {
     fn lookup(&mut self, topic: Topic) {
         let opts = QueryOpts {
             topic: topic.into(),
-            port: Some(self.local_port as u32),
+            port: Some(self.announce_port as u32),
             local_addr: None,
         };
         self.pending_commands.push_back(Command::Lookup(opts))
@@ -79,7 +72,7 @@ impl Discovery for DhtDiscovery {
     fn announce(&mut self, topic: Topic) {
         let opts = QueryOpts {
             topic: topic.into(),
-            port: Some(self.local_port as u32),
+            port: Some(self.announce_port as u32),
             local_addr: None,
         };
         self.pending_commands.push_back(Command::Announce(opts))

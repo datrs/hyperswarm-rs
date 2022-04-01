@@ -12,6 +12,7 @@ use super::tcp::{TcpStream, TcpTransport};
 #[cfg(feature = "transport_utp")]
 use super::utp::{UtpStream, UtpTransport};
 use super::{Connection, Transport};
+use crate::util::to_socket_addr;
 
 #[derive(Debug)]
 pub struct CombinedTransport {
@@ -22,15 +23,31 @@ pub struct CombinedTransport {
     connected: HashSet<SocketAddr>,
 }
 
+fn default_socket_addr() -> SocketAddr {
+    SocketAddr::new("0.0.0.0".parse().unwrap(), 0)
+}
+
+fn unwrap_socket_addr<A: ToSocketAddrs>(addr: Option<A>) -> io::Result<SocketAddr> {
+    if let Some(addr) = addr {
+        to_socket_addr(addr)
+    } else {
+        Ok(default_socket_addr())
+    }
+}
+
 impl CombinedTransport {
-    pub async fn bind<A>(local_addr: A) -> io::Result<Self>
+    pub async fn bind<A>(local_addr: Option<A>) -> io::Result<Self>
     where
         A: ToSocketAddrs + Send,
     {
+        let local_addr = unwrap_socket_addr(local_addr)?;
+
         let tcp = TcpTransport::bind(local_addr).await?;
         let local_addr = tcp.local_addr();
+
         #[cfg(feature = "transport_utp")]
         let utp = UtpTransport::bind(local_addr).await?;
+
         Ok(Self {
             tcp,
             #[cfg(feature = "transport_utp")]
@@ -103,9 +120,10 @@ impl CombinedTransport {
             let conn = Connection::new(stream, peer_addr, is_initiator, protocol);
             Some(Ok(conn))
         } else {
+            let dir = if is_initiator { "to" } else { "from" };
             debug!(
-                "skip double connection to {} via {} (init {})",
-                peer_addr, protocol, is_initiator
+                "skip double connection {} {}://{}",
+                dir, protocol, peer_addr
             );
             None
         }
@@ -115,6 +133,7 @@ impl CombinedTransport {
 impl Transport for CombinedTransport {
     type Connection = CombinedStream;
     fn connect(&mut self, peer_addr: SocketAddr) {
+        // log::debug!("connect to {} from {}", peer_addr, self.local_addr());
         self.tcp.connect(peer_addr);
         #[cfg(feature = "transport_utp")]
         self.utp.connect(peer_addr);

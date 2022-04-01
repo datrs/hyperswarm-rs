@@ -1,6 +1,6 @@
 use futures::io::{AsyncRead, AsyncWrite};
 use futures::stream::Stream;
-use std::fmt::Debug;
+use std::fmt::{self, Debug};
 use std::io;
 use std::net::SocketAddr;
 use std::pin::Pin;
@@ -61,6 +61,15 @@ where
 
     pub fn into_parts(self) -> (T, SocketAddr, bool, String) {
         (self.inner, self.peer_addr, self.is_initiator, self.protocol)
+    }
+}
+
+impl<T> fmt::Display for Connection<T>
+where
+    T: Debug + AsyncRead + AsyncWrite + Unpin,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}:{}", self.protocol(), self.peer_addr())
     }
 }
 

@@ -1,9 +1,8 @@
 use async_std::channel;
 use async_std::stream::Stream;
 use async_std::task::{Context, Poll};
-use colmeia_hyperswarm_mdns::{self_id, Announcer, Locator};
+use colmeia_hyperswarm_mdns::{Announcer, Locator};
 use futures_lite::ready;
-// use log::*;
 use std::convert::TryInto;
 use std::fmt;
 use std::future::Future;
@@ -11,7 +10,7 @@ use std::io;
 use std::pin::Pin;
 use std::time::Duration;
 
-use crate::Config;
+use crate::IdBytes;
 
 use super::{Discovery, DiscoveryMethod, PeerInfo, Topic};
 
@@ -25,6 +24,44 @@ mod socket {
     pub fn create() -> io::Result<MulticastSocket> {
         let addr = SocketAddrV4::new(MDNS_IP, 5353);
         MulticastSocket::all_interfaces(addr)
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct MdnsConfig {
+    // pub socket: Option<MulticastSocket>,
+    pub id: Option<IdBytes>,
+    pub lookup_interval: Duration,
+    pub announce_port: Option<u16>,
+}
+
+impl MdnsConfig {
+    pub fn new() -> Self {
+        Self {
+            lookup_interval: Duration::from_secs(60),
+            id: None,
+            announce_port: None,
+        }
+    }
+
+    // pub fn set_socket(self, socket: MulticastSocket) -> Self {
+    //     self.socket = Some(socket);
+    //     self
+    // }
+
+    pub fn set_id(mut self, id: IdBytes) -> Self {
+        self.id = Some(id);
+        self
+    }
+
+    pub fn set_lookup_interval(mut self, interval: Duration) -> Self {
+        self.lookup_interval = interval;
+        self
+    }
+
+    pub fn set_announce_port(mut self, port: u16) -> Self {
+        self.announce_port = Some(port);
+        self
     }
 }
 
@@ -52,13 +89,12 @@ impl fmt::Debug for MdnsDiscovery {
 }
 
 impl MdnsDiscovery {
-    pub async fn bind(local_port: u16, _config: Config) -> io::Result<Self> {
-        let self_id = self_id();
+    pub async fn bind(config: MdnsConfig, announce_port: u16) -> io::Result<Self> {
+        let self_id = config.id.unwrap_or_else(|| IdBytes::random());
         let socket = socket::create()?;
-        let lookup_interval = Duration::from_secs(60);
-        let locator = Locator::listen(socket, lookup_interval, self_id.as_bytes());
+        let locator = Locator::listen(socket, config.lookup_interval, &self_id.0);
         let socket = socket::create()?;
-        let announcer = Announcer::listen(socket, local_port, self_id.clone());
+        let announcer = Announcer::listen(socket, announce_port, hex::encode(&self_id.0));
         let (pending_commands_tx, pending_commands_rx) = channel::unbounded();
         Ok(Self {
             locator,

@@ -36,12 +36,10 @@ impl fmt::Debug for Hyperswarm {
 
 impl Hyperswarm {
     pub async fn bind(config: Config) -> io::Result<Self> {
-        let local_addr = "localhost:0";
-
-        let transport = CombinedTransport::bind(local_addr).await?;
-        let local_addr = transport.local_addr();
-        let port = local_addr.port();
-        let discovery = CombinedDiscovery::bind(port, config).await?;
+        let transport = CombinedTransport::bind(config.local_addr).await?;
+        let announce_addr = transport.local_addr();
+        let announce_port = announce_addr.port();
+        let discovery = CombinedDiscovery::bind(config, announce_port).await?;
 
         let (command_tx, command_rx) = channel::unbounded::<ConfigureCommand>();
 
@@ -56,7 +54,12 @@ impl Hyperswarm {
 
     pub fn configure(&mut self, topic: Topic, config: TopicConfig) {
         let old = self.topics.remove(&topic).unwrap_or_default();
-        debug!("configure swarm: {} {:?}", hex::encode(topic), config);
+        debug!(
+            "topic: {} announce {} lookup {}",
+            pretty_hash::fmt(&topic).unwrap(),
+            config.announce,
+            config.lookup
+        );
         if config.announce && !old.announce {
             self.discovery.announce(topic);
         }
@@ -90,13 +93,6 @@ impl Stream for Hyperswarm {
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let this = self.get_mut();
 
-        // Poll new connections.
-        let res = Pin::new(&mut this.transport).poll_next(cx);
-        if let Poll::Ready(Some(res)) = res {
-            debug!("new connection: {:?}", res);
-            return Poll::Ready(Some(res));
-        }
-
         // Poll commands.
         while let Poll::Ready(Some((topic, config))) = Pin::new(&mut this.command_rx).poll_next(cx)
         {
@@ -109,7 +105,26 @@ impl Stream for Hyperswarm {
             Poll::Pending | Poll::Ready(None) => {}
             Poll::Ready(Some(Err(e))) => return Poll::Ready(Some(Err(e))),
             Poll::Ready(Some(Ok(peer_info))) => {
+                debug!("new discovery: {}", peer_info);
                 this.transport.connect(peer_info.addr());
+            }
+        }
+
+        // Poll new connections.
+        let res = Pin::new(&mut this.transport).poll_next(cx);
+        if let Poll::Ready(Some(res)) = res {
+            match res {
+                Ok(conn) => {
+                    let dir = if conn.is_initiator() { "to" } else { "from" };
+                    debug!(
+                        "new connection {} {}://{} ",
+                        dir,
+                        conn.protocol(),
+                        conn.peer_addr()
+                    );
+                    return Poll::Ready(Some(Ok(conn)));
+                }
+                Err(err) => error!("{}", err),
             }
         }
 
@@ -132,10 +147,11 @@ mod test {
         env_logger::init();
         let (bs_addr, _bs_task) = run_bootstrap_node::<SocketAddr>(None).await?;
         // eprintln!("bootstrap node on {}", bs_addr);
-        let config = Config::default().set_bootstrap_nodes(Some(vec![bs_addr]));
-        let mut swarm_a = Hyperswarm::bind(config.clone()).await?;
+        let config_a = Config::default().set_bootstrap_nodes(&[bs_addr]);
+        let config_b = Config::default().set_bootstrap_nodes(&[bs_addr]);
+        let mut swarm_a = Hyperswarm::bind(config_a).await?;
         // eprintln!("A {:?}", swarm_a);
-        let mut swarm_b = Hyperswarm::bind(config).await?;
+        let mut swarm_b = Hyperswarm::bind(config_b).await?;
         // eprintln!("B {:?}", swarm_b);
 
         let topic = [0u8; 32];
@@ -146,7 +162,7 @@ mod test {
         let (done1_tx, mut done1_rx) = channel::bounded(1);
         let task_a = task::spawn(async move {
             while let Some(stream) = swarm_a.next().await {
-                eprintln!("A: NEW STREAM {:?}", stream);
+                // eprintln!("A: NEW STREAM {:?}", stream);
                 let mut stream = stream.unwrap();
                 let done_tx = done1_tx.clone();
                 task::spawn(async move {
