@@ -32,6 +32,7 @@ colmeia-hyperswarm-mdns = { git = "https://github.com/bltavares/colmeia.git", re
 libutp-rs = { git = "https://github.com/Frando/libutp-rs.git", branch = "feat/clone2", optional = true }
 async-trait = "0.1.53"
 async-compat = "0.2.1"
+blake2-rfc = "0.2.18"
 
 [dev-dependencies]
 env_logger = "0.8.3"

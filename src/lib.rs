@@ -28,6 +28,7 @@ pub use discovery::dht::DhtConfig;
 pub use discovery::mdns::MdnsConfig;
 
 pub use hyperswarm_dht::{IdBytes, DEFAULT_BOOTSTRAP};
+pub use util::hash_topic;
 
 use transport::combined::CombinedStream;
 pub use transport::Connection;

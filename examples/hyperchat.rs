@@ -3,14 +3,14 @@ use async_std::io::{self, ReadExt, WriteExt};
 use async_std::stream::StreamExt;
 use async_std::sync::Mutex;
 use async_std::task::{self, JoinHandle};
-use blake2_rfc::blake2b::Blake2b;
 use clap::Parser;
 use futures::future::{select, Either};
-use std::convert::TryInto;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use hyperswarm::{BootstrapNode, Config, DhtConfig, Hyperswarm, HyperswarmStream, TopicConfig};
+use hyperswarm::{
+    hash_topic, BootstrapNode, Config, DhtConfig, Hyperswarm, HyperswarmStream, TopicConfig,
+};
 
 const DISCOVERY_NS_BUF: &[u8] = b"hyperchat:v0";
 
@@ -80,7 +80,7 @@ async fn main() -> anyhow::Result<()> {
             let handle = swarm.handle();
             let config = TopicConfig::announce_and_lookup();
             for topic in join_opts.topics {
-                let hash = hash_topic(topic.as_bytes());
+                let hash = hash_topic(DISCOVERY_NS_BUF, topic.as_bytes());
                 handle.configure(hash, config.clone());
                 eprintln!("join topic \"{}\": {}", topic, hex::encode(hash));
             }
@@ -275,12 +275,6 @@ async fn connection_loop(
             },
         }
     }
-}
-
-pub fn hash_topic(key: &[u8]) -> [u8; 32] {
-    let mut hasher = Blake2b::with_key(32, key);
-    hasher.update(DISCOVERY_NS_BUF);
-    hasher.finalize().as_bytes().try_into().unwrap()
 }
 
 pub fn random_name() -> String {
