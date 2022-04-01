@@ -23,7 +23,7 @@ pub trait Transport:
     // ) -> Poll<Option<io::Result<Connection<Self::Connection>>>>;
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Connection<T>
 where
     T: Debug,

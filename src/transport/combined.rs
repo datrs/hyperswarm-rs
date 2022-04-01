@@ -158,6 +158,7 @@ impl Stream for CombinedTransport {
     }
 }
 
+#[derive(Clone)]
 pub enum CombinedStream {
     Tcp(TcpStream),
     #[cfg(feature = "transport_utp")]
