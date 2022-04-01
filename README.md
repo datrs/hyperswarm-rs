@@ -41,7 +41,7 @@
 
 ## Installation
 ```sh
-$ cargo add hyperswarm --git https://github.com/Frando/hyperswarm-rs.git
+$ cargo add hyperswarm --git https://github.com/datrs/hyperswarm-rs.git
 ```
 
 ## Usage
