@@ -69,7 +69,7 @@ async fn main() -> anyhow::Result<()> {
             let config = if !opts.bootstrap.is_empty() {
                 config.set_bootstrap_nodes(&opts.bootstrap)
             } else {
-                config
+                config.set_bootstrap_nodes(&["127.0.0.1:49737"])
             };
             let name = join_opts.name.unwrap_or_else(random_name);
             eprintln!("your name: {}", name);

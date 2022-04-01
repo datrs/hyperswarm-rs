@@ -129,7 +129,7 @@ Running bootstrap node on 0.0.0.0:49737
 ```
 2) Run clients and write with each other.
 ```
-$ cargo run --example hyperchat -- -b 127.0.0.1:49737 join --topics asdf --name alice
+$ cargo run --example hyperchat -- join --topics asdf --name alice
 your name: alice
 join topic "asdf": a05d11c6234b3321315ec175592dfc193f5650a28b569b3e09bac5a4216bb138
 [tcp:127.0.0.1:42172] connected
@@ -141,7 +141,7 @@ hello!
 ```
 
 ```
-$ cargo run --example hyperchat -- -b 127.0.0.1:49737 join --topics asdf --name bob
+$ cargo run --example hyperchat -- join -t asdf -n bob
 your name: bob
 join topic "asdf": a05d11c6234b3321315ec175592dfc193f5650a28b569b3e09bac5a4216bb138
 [utp:127.0.0.1:41187] connected
