@@ -55,7 +55,7 @@ This crate exposes a `Hyperswarm` struct. After binding it, this will:
 - Announce and lookup any 32 byte topic key over both mDNS and the DHT
 - Connect to all peers that are found over both TCP and UTP
 
-It currently depends on the unreleased [hyperswarm-dht](https://github.com/mattsse/hyperswarm-dht) crate and therefore is also not yet released on crates.io.
+It currently depends on the unreleased [hyperswarm-dht](https://github.com/datrs/hyperswarm-dht) crate and therefore is also not yet released on crates.io.
 
 The API is designed to be very simple:
 
@@ -155,7 +155,7 @@ hi there :)
 - [x] Initial implementation
 - [ ] Find peers over the Hyperswarm DHT
     - [x] Both NodeJS and Rust peers are found if connecting to a Rust bootstrap node
-    - [ ] Fix [hyperswarm-dht](https://github.com/mattsse/hyperswarm-dht) to work with NodeJS bootstrap nodes
+    - [ ] Fix [hyperswarm-dht](https://github.com/datrs/hyperswarm-dht) to work with NodeJS bootstrap nodes
 - [ ] Find peers over mDNS
     - [ ] Change colmeia-mdns to better fit the architecture here or copy and adapt the mdns code over into the mdns module
 - [x] Connect to peers over TCP
