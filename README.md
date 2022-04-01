@@ -105,6 +105,10 @@ async fn on_connection(mut stream: HyperswarmStream) -> io::Result<()> {
 }
 ```
 
+## Examples
+
+### Simple example with Node.js interop
+
 See [`examples/simple.rs`](examples/simple.rs) for a working example that also runs a bootstrap node. That example can also find and connect to NodeJS peers. To try it out:
 
 ```sh
@@ -114,6 +118,37 @@ node js/simple.js
 ```
 
 Currently, the DHT bootstrap node has to be run from Rust. The Rust implementation does not find peers on a NodeJS bootstrap node. 
+
+### Hyperchat
+
+[`examples/hyperchat.rs`](examples/hyperchat.rs) is a very basic chat-over-hyperswarm example. To try locally you'll need three terminals
+1) Run a bootstrap node: 
+```
+$ cargo run --example hyperchat -- bootstrap`
+Running bootstrap node on 0.0.0.0:49737
+```
+2) Run clients and write with each other.
+```
+$ cargo run --example hyperchat -- -b 127.0.0.1:49737 join --topics asdf --name alice
+your name: alice
+join topic "asdf": a05d11c6234b3321315ec175592dfc193f5650a28b569b3e09bac5a4216bb138
+[tcp:127.0.0.1:42172] connected
+[utp:127.0.0.1:38683] connected
+[utp:127.0.0.1:38683] is now known as `bob`
+[tcp:127.0.0.1:42172] disconnected
+[utp:127.0.0.1:38683] <bob> hi there :)
+hello!
+```
+
+```
+$ cargo run --example hyperchat -- -b 127.0.0.1:49737 join --topics asdf --name bob
+your name: bob
+join topic "asdf": a05d11c6234b3321315ec175592dfc193f5650a28b569b3e09bac5a4216bb138
+[utp:127.0.0.1:41187] connected
+[utp:127.0.0.1:41187] is now known as `alice`
+hi there :)
+[utp:127.0.0.1:41187] <alice> hello!
+```
 
 ## Roadmap
 
